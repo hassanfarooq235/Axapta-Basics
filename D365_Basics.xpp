@@ -1,0 +1,730 @@
+//How to access individual field on the form using form data source?
+myTable_ds.object( fieldNum( myTable, myField ) ).visible( false );
+
+//How to create an auto lookup without writing code where Field 2 lookup is based on Field 1 Value?
+//In order to achieve this create a relationship in the related table but make sure Field 1 is the first relation in the relationship and Field 2 is the second relation. This can be done by actually creating Field 2 relation before Field 1.
+
+//How to create a simple dialog box?
+Dialog      dialog;
+DialogField field;
+   
+dialog = new Dialog("My Dialog");
+dialog.addText("Select your favorite customer:");
+field = dialog.addField(ExtendedTypeStr(CustAccount));
+dialog.run();
+if (dialog.closedOk())
+{
+      info(field.value());
+}
+
+//How to convert string to enum?
+SMATransactionType  transactionType;
+transactionType = str2enum(transactionType, "Hour");
+info(enum2str(transactionType));
+
+//Date Time Affectivity
+//http://dynamics-ax-chronicles.blogspot.com.au/2011/09/date-effective-tables-with.html
+utcDateTime fromDateTime, toDateTime;
+fromDateTime = DateTimeUtil::newDateTime(3\3\2012, 0);
+toDateTime   = DateTimeUtil::maxValue();
+
+//Selecting a time effective record based on from date
+select validTimeState(fromDateTime) table;
+
+//Selecting a time effective record based on from date and to date
+select validTimeState(fromDateTime, toDateTime) table;
+
+
+// Import Text File
+static void RB_ReadTextFile(Args _args)
+{
+    Filename                                              filename = @'C:\Desktop\AX2012.txt';
+    System.IO.StreamReader          reader;
+    System.String                                   line;
+    InteropPermission                       interopPermission;
+    Str                                                         text;
+
+    interopPermission = new InteropPermission(InteropKind::ClrInterop);
+    interopPermission.assert();
+
+    reader = new System.IO.StreamReade(filename,System.Text.Encoding::get_UTF8());
+    line = reader.ReadLine();
+
+    while (!System.String::IsNullOrEmpty(line))
+    {
+        line = reader.ReadLine();
+        text = line;
+        info(strfmt("%1", text));
+    }
+
+    reader.Close();
+    reader.Dispose();
+}
+
+
+//Import CSV File
+static void RB_ReadCsvFile(Args _args)
+{
+    #File
+    IO  iO;
+    CustAccount custAccount;
+    CustName custname;
+    FilenameOpen        filename = "C:\\Desktop\\RB.csv";
+    Container           record;
+    boolean first = true;
+
+    ;
+
+    iO = new CommaTextIo(filename,#IO_Read);
+
+    if (! iO || iO.status() != IO_Status::Ok)
+    {
+        throw error("@SYS19358");
+    }
+    while (iO.status() == IO_Status::Ok)
+    {
+        record = iO.read();
+        if (record)
+        {
+            if (first)  // to exclude the header
+            {
+                first = false;
+            }
+            else
+            {
+                custAccount = conpeek(record, 1);
+                custname = conpeek(record, 2);
+                info(strfmt('%1--%2',custAccount,custname));
+            }
+        }
+    }
+}
+
+
+//Import Excel File
+// This job is used to update the parking locations for all shifts
+//Excel Format / Shift ID, Block ID, Parking Location
+static void MSTA_DM_Roster_UpdateParkingLocations(Args _args)
+{
+    //Dialog Field
+    Dialog fileDialog;
+    DialogField sharedPath;
+
+    // Excel Setup
+    SysExcelApplication application;
+    SysExcelWorkbooks workbooks;
+    SysExcelWorkbook workbook;
+    SysExcelWorksheets worksheets;
+    SysExcelWorksheet worksheet;
+    SysExcelCells cells;
+    COMVariantType type;
+    int row = 1;
+    //Data Setup
+    MSTARosterGroupLine rosterGroupLine;
+    MSTARosterLine rosterLine;
+    str 20 shiftFilter;
+
+
+
+    fileDialog = new Dialog("Select parking locations improt files for company " + curext());
+    fileDialog.addText("Select parking locations improt files for company " + curext());
+    sharedPath = fileDialog.addField(extendedTypeStr(FilenameOpen), "File Path");
+
+    fileDialog.run();
+    if (fileDialog.closedOk())
+    {
+        try
+        {
+            application = SysExcelApplication::construct();
+            workbooks   = application.workbooks();
+            //TODO: Enter the excel file path
+            workbooks.open(sharedPath.value());
+            workbook = workbooks.item(1);
+            worksheets = workbook.worksheets();
+            worksheet = worksheets.itemFromNum(1);
+            cells = worksheet.cells();
+
+            ttsBegin;
+           
+            do
+            {
+                //First row should be column names
+                row = row + 1;
+
+                while select forupdate rosterGroupLine               
+                    where rosterGroupLine.ShiftId == Global::COMVariant2Str(cells.item(row, 1).value())                      
+                {
+                    rosterGroupLine.ParkingLocationUniqueId = Global::COMVariant2Str(cells.item(row, 3).value());
+                    rosterGroupLine.update();
+                   
+                   
+                    while select forUpdate rosterLine
+                        where rosterLine.GroupRefId == rosterGroupLine.RecId
+                    {
+                        if(rosterLine.VehicleBlockId == Global::COMVariant2Str(cells.item(row, 2).value()))
+                        {
+                            rosterLine.ParkingLocationUniqueId = Global::COMVariant2Str(cells.item(row, 3).value());
+                            rosterLine.update();
+                        }
+                    }
+                }
+               
+                type = cells.item(row, 1).value().variantType();
+            }while (type != COMVariantType::VT_EMPTY);
+
+            application.quit();
+            info("Records Import " + int2str(row));
+
+            ttsCommit;
+        }
+        catch
+        {
+            ttsAbort;
+            application.quit();
+            error("@SYS80663");
+        }
+    }
+}
+
+
+//Importing Data from Database
+
+//Which EDT is associated with File Selection and Folder Selection
+//For folder use FilePath EDT
+//For File Name use FileNameOpen EDT
+
+//How to make any alphabet as capital letter?
+Use strUp method
+
+
+//How to create manual auto numbering system?
+//A technique I used in HR was as below,
+
+// Get New Auto Number Based On Company
+public static str getNewPersonnelNumber()
+{
+    int maxLenght = 4;
+    str tempEmployeeID;
+    str newNumber;
+    int newIndex;
+    str companyIdx;
+    HCMWorker localWorker;
+    str ret;
+    str 2 companyIdFilter;
+
+    //Pickup the first digit as company name
+    companyIdx = String::trimToLength(curext(), 1);
+    companyIdx = strUpr(companyIdx);
+    companyIdFilter = companyIdx + '*';
+    select firstOnly localWorker
+        order by localWorker.PersonnelNumber desc
+        where localWorker.PersonnelNumber like companyIdFilter;
+    tempEmployeeID = localWorker.PersonnelNumber;
+    newNumber = String::replaceAll(tempEmployeeID, companyIdx, "");
+    newIndex = str2int(newNumber);
+    newIndex = newIndex + 1;
+    newNumber = String::fillString(maxLenght - strLen(int2str(newIndex)), '0') + int2str(newIndex);
+    newNumber = companyIdx + newNumber;
+    ret  = newNumber;
+
+    return ret;
+}
+//Get New Auto Number Based On Company
+
+
+//Creating a form at run time / dynamic form
+//http://dynamicsax-dev.blogspot.com.au/2008/07/creating-form-at-run-time.html
+
+//Creating and saving AX object on runtime (Saving in AOT Tree)
+//http://axblog4u.wordpress.com/2010/12/04/treenode-aot-save-%E2%80%93-did-you-know/
+
+
+//Creating a sys progress bar
+#AviFiles
+SysOperationProgress    progressBar = new SysOperationProgress();
+;
+// Initialising progress bar
+progressBar.setCaption("Export To Excel in progress...");
+progressBar.setAnimation(#AviTransfer);
+
+progressBar.setText(strfmt("Employee %1", emplTable.name()));
+
+Traversing a data source on a form
+PRMJournalTransHeader journalTransHeaderLocal;
+    if(Box::yesNo("@BCS10177", DialogButton::No) == DialogButton::Yes)
+    {
+        ttsbegin;
+        for (journalTransHeaderLocal = PRMJournalTransHeader_DS.getFirst();
+            journalTransHeaderLocal; journalTransHeaderLocal = PRMJournalTransHeader_DS.getNext() )
+        {
+           
+            PRMGenerateEarningAndDeductions::generateAllDedAndEarns(journalTransHeaderLocal);
+        }
+        ttscommit;
+       
+        PRMJournalTransHeader_ds.executeQuery();
+    }
+}
+
+
+//Ledger Dimensions Functionality
+//Print the financial dimensions for all employments
+static void MSTA_HR_140610_EmplDim(Args _args)
+{
+   
+    HcmWorker worker;
+    HcmEmployment employment;
+    #AviFiles
+    SysOperationProgress    progressBar = new SysOperationProgress();
+   
+    // Initialising progress bar
+    progressBar.setCaption("Printing in progress...");
+    progressBar.setAnimation(#AviTransfer);
+   
+    while select worker
+    {
+        progressBar.setText(strfmt("Employee %1", worker.name()));
+        employment = HcmEmployment::getActiveEmploymentsByWorker(worker.RecId);
+        if(employment.DefaultDimension)
+        {
+            info(strFmt("%1, %2, Department Value: %3", worker.PersonnelNumber, worker.name(), getDefaultDimensionValue(employment.DefaultDimension, "Department")));
+        }
+    }  
+}
+
+//How to get the dimension value from a ledger dimension
+
+static str 255 getDefaultDimensionValue(RecId defaultDimension, Name dimName)
+{
+    str 255 ret;
+    DimensionAttributeValueSetStorage dimStorage;
+    dimStorage = DimensionAttributeValueSetStorage::find(defaultDimension);
+    ret = dimStorage.getDisplayValueByDimensionAttribute(DimensionAttribute::findByName(dimName).RecId);
+    return ret;
+}
+
+How to get the dimension value from a ledger dimension
+
+static RecId setDefaultDimensionValue(RecId defaultDimension, Name dimName, str 255 dimValue)
+{
+    DimensionAttributeValueSetStorage dimStorage;
+    Counter i;
+    DimensionAttribute dimAttributeCostCenter;
+    DimensionAttributeValue dimAttributeValue;
+    dimStorage = DimensionAttributeValueSetStorage::find(defaultDimension);
+    dimAttributeCostCenter = DimensionAttribute::findByName(dimName);
+    if(dimValue)
+    {
+        dimAttributeValue = DimensionAttributeValue::findByDimensionAttributeAndValue(dimAttributeCostCenter, dimValue, true, true);
+        dimStorage.addItem(dimAttributeValue);
+    }
+    else
+    {
+        dimStorage.removeDimensionAttribute(DimensionAttribute::findByName(dimName).RecId);
+    }
+    return dimStorage.save();
+}
+
+//How to update worker dimension values
+
+static void MSTA_HR_140610_UpdateEmplDim(Args _args)
+{
+
+    HcmWorker worker;
+    HcmEmployment employment;
+    #AviFiles
+    SysOperationProgress    progressBar = new SysOperationProgress();
+
+    // Initialising progress bar
+    progressBar.setCaption("Printing in progress...");
+    progressBar.setAnimation(#AviTransfer);
+
+    ttsBegin;
+    while select worker
+    {
+        progressBar.setText(strfmt("Employee %1", worker.name()));
+        employment = HcmEmployment::getActiveEmploymentsByWorker(worker.RecId);
+        employment.selectForUpdate(true);
+        employment.validTimeStateUpdateMode(ValidTimeStateUpdate::Correction);
+        if(employment.DefaultDimension)
+        {
+            employment.DefaultDimension = Global::setDefaultDimensionValue( employment.DefaultDimension, "Contract", "None");
+            employment.DefaultDimension = Global::setDefaultDimensionValue( employment.DefaultDimension, "ContractType", "None");
+            employment.update();
+            info(strFmt("%1, %2, Department Value: %3", worker.PersonnelNumber, worker.name(),
+                getDefaultDimensionValue(employment.DefaultDimension, "Department")));
+        }
+    }
+    ttsCommit;
+}
+
+//How Can I use distinct / unique is X++ statements?
+//Use 'GroupBy'  in the select statement which field you want the distinct records.
+
+//A4 portrait and landscape paper size?
+//The paper size for A4 portrait is 8.27 * 11.69 inches and for Landscape is 11.69 * 8.27. Make sure that the page size is inclusive of the margins.
+//The paper size for A4 portrait is 210 * 297 mm and for Landscape is 297 * 210. Make sure that the page size is inclusive of the margins.
+
+
+//How to convert EDT to str to be used in dialog fields?
+Use extendedTypeStr
+
+//How to shrink the database log files?
+//See names of the log file in DB
+SELECT name, physical_name AS current_file_location
+FROM sys.master_files
+
+USE AdventureWorks2012;
+GO
+-- Truncate the log by changing the database recovery model to SIMPLE.
+ALTER DATABASE AdventureWorks2012
+SET RECOVERY SIMPLE;
+GO
+-- Shrink the truncated log file to 1 MB.
+DBCC SHRINKFILE (AdventureWorks2012_Log, 1);
+GO
+-- Reset the database recovery model.
+ALTER DATABASE AdventureWorks2012
+SET RECOVERY FULL;
+GO
+
+//How to export to Excel?
+static void SR_SysExcelWorksheetHelper(Args _args)
+{
+    CustTable               custTable;
+    SysExcelWorksheetHelper worksheetHelper;
+    SysExcelHelper          sysExcelHelper;
+    SysExcelWorksheet       worksheet;
+    int                     currentRow = 1;
+    int                     sumRow;
+    str                     worksheetName;
+    int                     redColor = WinAPI::RGB2int(255, 0, 0);
+    SysExcelRange           range;
+    COMVariant              cellValue = new COMVariant(COMVariantInOut::Out);
+    str                     fileName;
+    str attachmentPath      = "C:\\";
+
+    // Sets the font color for a range of cells
+    void setRangeFont(int _fromColumn, int _fromRow, int _toColumn, int _toRow, int _rgbIntColor)
+    {
+        range = worksheetHelper.getWorksheetRange(_fromColumn, _fromRow, _toColumn, _toRow);
+        worksheetHelper.setFontColor(range, _rgbIntColor);
+    }
+
+
+    // Defines the columns of the spreadsheet
+    #define.AccountNum(1)
+    #define.Currency(2)
+    #define.CustGroup(3)
+    #define.BalanceMST(4)
+
+    worksheetName = "@SYS135880";
+
+    sysExcelHelper = SysExcelHelper::construct();
+
+    sysExcelHelper.initialize();
+
+    worksheet = sysExcelHelper.addWorksheet(worksheetName);
+
+    worksheetHelper = SysExcelWorksheetHelper::construct(worksheet);
+
+    // Populate the header row with the appropriate field labels and format the columns
+    worksheetHelper.addColumnFromTableField(#AccountNum, tablenum(CustTable), fieldnum(CustTable, AccountNum));
+    worksheetHelper.addColumnFromTableField(#Currency, tablenum(CustTable), fieldnum(CustTable, Currency));
+    worksheetHelper.addColumnFromTableField(#CustGroup, tablenum(CustTable), fieldnum(CustTable, CustGroup));
+    worksheetHelper.addColumn(#BalanceMST, "Balance MST", Types::Real);
+
+    while select custTable
+    {
+        currentRow ++;
+        worksheetHelper.setCellValue(#AccountNum, currentRow, custTable.AccountNum);
+        worksheetHelper.setCellValue(#Currency, currentRow, custTable.Currency);
+        worksheetHelper.setCellValue(#CustGroup, currentRow, custTable.CustGroup);
+        worksheetHelper.setCellValue(#BalanceMST, currentRow, custTable.balanceMST());
+    }
+    if (currentRow > 1)
+    {
+        sumRow = currentRow + 2;
+
+        worksheetHelper.setCellValue(#BalanceMST, sumRow, "@SYS58659");
+
+        worksheetHelper.sumRange(worksheetHelper.getWorksheetRange(#BalanceMST, 2, #BalanceMST, currentRow), #BalanceMST, sumRow);
+
+        setRangeFont(#BalanceMST, 2, #BalanceMST, currentRow, redColor);
+
+        cellValue = worksheet.cells().item(sumRow, #BalanceMST).value();
+        if (cellValue.currency() > 0)
+        {
+        setRangeFont(#BalanceMST, sumRow, #BalanceMST, sumRow, redColor);
+        }
+    }
+    worksheetHelper.autoFitColumns();
+    worksheetHelper.formatWorksheetTableStyle(sysExcelHelper.getOfficeVersion());
+
+    // Generate the file using the current UTC date time (without the ‘:’ character)
+    // since it is not allowed for file names.
+fileName = strfmt("%1%2%3", WinApi::getTempPath(), strReplace(DateTimeUtil::toStr(DateTimeUtil::utcNow()), ":",""), sysExcelHelper.getFileExtension());
+
+    sysExcelHelper.save(filename);
+    sysExcelHelper.launchExcel();
+}
+
+
+//How to get temporary Path in AX?
+WinApi::getTempPath()
+
+//How to add a new Field in Managerial Hierarchy (Workflow Approval Limits)?
+//In order to add a new field in the managerial hierarchy either create a new HierarchyProvider or use WorkflowLimitHierarchyProvider class and add new fields in it.  Check the new method of WorkflowLimitHierarchyProvider  to get an overview.
+
+//Infolog system in Dynamics AX, how does it work?
+setPrefix("Level 1");
+Info("A");
+
+//Unbalanced TTS Begin
+static void resetTTS(Args _args)
+{
+    while (appl.ttsLevel() > 0)
+        ttsAbort;
+}
+
+//How to check if Code is running in CIL?
+Use if(xSession::isCLRSession()) {…}
+
+//Reflection: Traverse Projects AOT
+static void MSTA_Utility_ExportAllProjects(Args _args)
+{
+    #aot
+    #properties
+    #AviFiles
+    SysOperationProgress    progressBar = new SysOperationProgress();
+
+    TreeNode _treeNode;
+    TreeNode projectNode;
+    TreeNodeIterator iterator;
+    int i, a;
+    // Initialising progress bar
+    progressBar.setCaption("Export To Excel in progress...");
+    progressBar.setAnimation(#AviTransfer);
+
+    _treeNode = infolog.projectRootNode();
+    _treeNode = _treeNode.AOTfirstChild();
+
+    for(i = 0; i < 2; i++)
+    {
+        iterator = _treeNode.AOTiterator();
+        projectNode = iterator.next();
+        while (projectNode)
+        {
+            progressBar.setText(strfmt("Project %1", projectNode.treeNodeName()));
+            if(String::beginsWith(projectNode.treeNodeName(), "MSTA"))
+            {
+                info(projectNode.treeNodeName());
+            }
+            projectNode = iterator.next();
+            a++;
+        }
+        _treeNode = _treeNode.AOTnextSibling();
+    }
+
+}
+
+
+//Reflection: Traverse Classes AOT
+//Traverse Class
+static void FindClassStartsWithXXX(Args _args)
+ {
+   UtilIdElements utilId;
+ ;
+   while select utilId where utilid.recordType == UtilElementType::Class
+   && utilId.name like 'XXX*'
+   {
+     print utilId.name;
+   }
+   pause;
+ }
+
+//Traverse Class
+static void FindTablesStartsWithXXX(Args _args)
+ {
+   UtilIdElements utilId;
+ ;
+   while select utilId where utilid.recordType == UtilElementType::Table
+   && utilId.name like 'MSTA*'
+   {
+       info(utilId.name);
+   }
+   pause;
+ }
+
+
+//Update Class Properties
+static void RenameXXXObjectsToYYY(Args _args)
+ {
+   TreeNode  node = TreeNode::findNode(@'\Classes\XXXClass');
+   str oldName;
+   str newName;
+   #Properties
+   ;
+   oldName = node.AOTgetProperty(#PropertyName);
+   newName = strdel(oldName,1,3);
+   node.AOTsetProperty(#PropertyName, "YYY"+newName);
+   node.AOTsave();
+   node.treeNodeRelease();
+   node = null;
+ }
+
+
+//How to add database log manually?
+
+    DatabaseLog dblog;
+   
+    ttsBegin;
+   
+    dblog.logTable = tableNum(HcmWorker);
+    dblog.LogType = DatabaseLogType::Delete;
+    dblog.insert();
+   
+    ttsCommit;
+
+//Dynamics AX Collections
+//How to create a list of records and iterate them?
+ AifAction aifAction;
+    List actionsList = new List(Types::Record);
+    ListEnumerator listEnum;
+    ;
+
+    if(_actionsList)
+    {
+        listEnum = _actionsList.getEnumerator();
+        while(listEnum.moveNext())
+        {
+            aifAction = listEnum.current();
+            if( aifAction.WebMethodEnabled == NoYes::No &&
+                aifAction.WebSvcOutOfSync == NoYes::Yes &&
+                aifAction.ErrorState == AifServiceGenerationErrorState::WebServiceOutOfSyncError &&
+                aifAction.Intercompany == NoYes::No)
+            {
+                actionsList.addEnd(aifAction);
+            }
+        }
+    }
+
+
+//How to convert real numbers to time format
+public static str 5 num2Time(real _hours)
+{
+
+    int realPart;
+    int decimalPart;
+    real hours;
+    str hoursStr;
+    str minStr;
+    int decimalLocation;
+    str finalMinutes;
+    ;
+    try
+    {
+        hours = _hours;
+        hoursStr = num2str(hours, 0, 2, 1, 0);
+        decimalLocation = strfind(hoursStr, ".", 0, strlen(hoursStr));
+        hoursStr = substr(hoursStr, 0, decimalLocation);
+        hoursStr = trimString(hoursStr, ["."]);
+        minStr = num2str(hours, 0, 2, 1, 0);
+        minStr = substr(minStr, decimalLocation, strlen(minStr) - strlen(hoursStr));
+        minStr = trimString(minStr, ["."]);
+        realPart = str2int(hoursStr);
+        decimalPart = str2int(minStr);
+        finalMinutes = hoursStr + ":" + (int2str(60 * decimalPart / 100) == "0" ? "00" : int2str(60 * decimalPart / 100));
+        return finalMinutes;
+    }
+    catch
+    {
+        return num2str(_hours, 0, 2, 1, 0);
+    }
+}
+
+strFmt("%1:%2", hours div 1, strRfix(int2str(round(abs(hours)*60,1) mod 60),2,"0"))
+
+//From <http://msdax.blogspot.com.au/2011/06/converting-real-number-to-time.html>
+
+
+//SQL Server: Identifying and Killing Blocking Transactions
+
+SELECT
+db.name DBName,
+tl.request_session_id,
+wt.blocking_session_id,
+OBJECT_NAME(p.OBJECT_ID) BlockedObjectName,
+tl.resource_type,
+h1.TEXT AS RequestingText,
+h2.TEXT AS BlockingTest,
+tl.request_mode
+FROM sys.dm_tran_locks AS tl
+INNER JOIN sys.databases db ON db.database_id =tl.resource_database_id
+INNER JOIN sys.dm_os_waiting_tasks AS wt ON tl.lock_owner_address =wt.resource_address
+INNER JOIN sys.partitions AS p ON p.hobt_id =tl.resource_associated_entity_id
+INNER JOIN sys.dm_exec_connections ec1 ON ec1.session_id =tl.request_session_id
+INNER JOIN sys.dm_exec_connections ec2 ON ec2.session_id =wt.blocking_session_id
+CROSS APPLY sys.dm_exec_sql_text(ec1.most_recent_sql_handle) AS h1
+CROSS APPLY sys.dm_exec_sql_text(ec2.most_recent_sql_handle) AS h2
+GO
+
+//KILL
+From <http://blog.sqlauthority.com/2010/10/06/sql-server-quickest-way-to-identify-blocking-query-and-resolution-dirty-solution/>
+
+//How to Assign temporary table to Grid?
+Grid.setTmpData(temporaryTabeReference);
+
+
+//Lookups
+//How to create simple lookup?
+//Simple lookups can easily be created by adding a relation between the tables.
+
+//How to create a dynamic lookup?
+//In order to create a dynamic lookup there are two steps,
+//Step1: Create a lookup method in table or class
+public static void lookupVendorByCurrency(
+    FormControl _callingControl,
+    CurrencyCode _currency)
+{
+    Query query;
+    QueryBuildDataSource qbds;
+    QueryBuildRange qbr;
+    SysTableLookup lookup;
+   
+    query = new Query();
+    qbds = query.addDataSource(tableNum(VendTable));
+    qbr = qbds.addRange(fieldNum(VendTable, Currency));
+    qbr.value(queryvalue(_currency));
+    lookup = SysTableLookup::newParameters(tableNum(VendTable), _callingControl, true);
+    lookup.parmQuery(query);
+    lookup.addLookupField(fieldNum(VendTable, AccountNum), true);
+    lookup.addLookupField(fieldNum(VendTable,Party));
+    lookup.addLookupField(fieldNum(VendTable,Currency));
+    lookup.performFormLookup();
+}
+
+//Step2: Call the lookup method from the overridden lookup method on the data source field
+public void lookup(FormControl _formControl, str _filterStr)
+{
+    VendTable::lookupVendorByCurrency(_formControl, CustTable.Currency);
+}
+
+
+//Display Method Caching
+//Display methods must be written at table levels, in AX 2012 you can also use cache display method property of form controls.
+CustTable_ds.cacheAddMethod(tableMethodStr(CustTable, name), false);
+
+//How to implement multi-threading in AX ?
+
+
+//How to Place a new line character in a Label?
+Use  info(strFmtLB("@Label"));
+
+//How to change the splash screen for AX?
+//http://www.axaptapedia.com/Changing_Splashscreen
+
+//How to check configuration key?
+if (isConfigurationkeyEnabled(configurationKeyNum('MSTARails')))
+{
+}
